@@ -1,30 +1,44 @@
-from rich.console import Console
-from rich.traceback import install as tr_install
+"""A Rich sink for Loguru logger.
 
-from loguru_rich_sink.__main__ import (
+This package provides a Rich-based sink for the Loguru logging library,
+allowing you to display beautiful, formatted log messages in the terminal.
+
+Example:
+    from loguru import logger
+    from loguru_rich_sink import RichSink
+
+    logger.add(RichSink(), format="{message}")
+    logger.info("Hello, World!")
+"""
+
+from loguru_rich_sink.sink import (
+    FORMAT,
+    GRADIENTS,
+    LEVEL_STYLES,
+    LOGS_DIR,
+    RUN_FILE,
+    RichSink,
     get_console,
-    get_logger,
-    get_progress,
-    logger,
-    on_exit,
+    increment,
+    read,
+    rich_sink,
+    setup,
+    write,
 )
-from loguru_rich_sink.sink import RichSink, increment, read, rich_sink, setup, write
 
-console = Console()
-tr_install(console=console)
+__version__ = '0.0.3'
 
 __all__ = [
-    "RichSink",
-    "get_console",
-    "get_logger",
-    "get_progress",
-    "rich_sink",
-    "setup",
-    "read",
-    "write",
-    "increment",
-    "on_exit",
-    "logger",
+    'FORMAT',
+    'GRADIENTS',
+    'LEVEL_STYLES',
+    'LOGS_DIR',
+    'RUN_FILE',
+    'RichSink',
+    'get_console',
+    'increment',
+    'read',
+    'rich_sink',
+    'setup',
+    'write',
 ]
-
-setup()

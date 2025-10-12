@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import atexit
 import sys
+from typing import TYPE_CHECKING
 
-from loguru import (
-    Logger,  # type: ignore
-    logger,
-)
+from loguru import logger
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -23,8 +21,11 @@ from rich.traceback import install as tr_install
 
 from loguru_rich_sink.sink import FORMAT, LOGS_DIR, RichSink, increment, read, setup
 
+if TYPE_CHECKING:
+    from loguru import Logger as _Logger
 
-def get_console(console: Console = Console()) -> Console:
+
+def get_console(console: Console | None = None) -> Console:
     """Initialize the console and return it.
 
     Args:
@@ -33,50 +34,49 @@ def get_console(console: Console = Console()) -> Console:
     Returns:
         Console: A Rich console.
     """
-    tr_install(console=console)
+    if console is None:
+        console = Console()
+    _ = tr_install(console=console)
     return console
 
 
-def get_logger(
-    console: Console = get_console(), logger: Logger = logger
-) -> Logger:  # type: ignore
+def get_logger() -> _Logger:
     """Initialize the logger with two sinks and return it."""
-    logger = logger if logger is not None else logger
     run = setup()
     logger.remove()
-    logger.configure(
+    _: list[int] = logger.configure(
         handlers=[
             {
-                "sink": RichSink(),
-                "format": "{message}",
-                "level": "INFO",
-                "backtrace": True,
-                "diagnose": True,
-                "colorize": False,
+                'sink': RichSink(),
+                'format': '{message}',
+                'level': 'INFO',
+                'backtrace': True,
+                'diagnose': True,
+                'colorize': False,
             },
             {
-                "sink": str(LOGS_DIR / "trace.log"),
-                "format": FORMAT,
-                "level": "TRACE",
-                "backtrace": True,
-                "diagnose": True,
-                "colorize": False,
+                'sink': str(LOGS_DIR / 'trace.log'),
+                'format': FORMAT,
+                'level': 'TRACE',
+                'backtrace': True,
+                'diagnose': True,
+                'colorize': False,
             },
         ],
-        extra={"run": run},
+        extra={'run': run},
     )
-    return logger
+    return logger  # type: ignore[return-value]
 
 
-def get_progress(console: Console = get_console()) -> Progress:
+def get_progress(console: Console | None = None) -> Progress:
     """Initialize the progress bar and return it."""
     if console is None:
-        console = Console()
+        console = get_console()
     progress = Progress(
-        SpinnerColumn(spinner_name="earth"),
-        TextColumn("[progress.description]{task.description}"),
+        SpinnerColumn(spinner_name='earth'),
+        TextColumn('[progress.description]{task.description}'),
         BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TextColumn('[progress.percentage]{task.percentage:>3.0f}%'),
         TimeElapsedColumn(),
         TimeRemainingColumn(),
         MofNCompleteColumn(),
@@ -85,33 +85,32 @@ def get_progress(console: Console = get_console()) -> Progress:
     return progress
 
 
-def on_exit():
+def on_exit() -> None:
     """At exit, read the run number and increment it."""
     try:
         run = read()
-        logger.info(f"Run {run} Completed")
+        logger.info('Run {} Completed', run)
         run = increment()
     except FileNotFoundError as fnfe:
-        logger.error(fnfe)
+        logger.exception(fnfe)
         run = setup()
-        logger.info(f"Run {run} Completed")
+        logger.info('Run {} Completed', run)
     run = increment()
 
 
-atexit.register(on_exit)
+_ = atexit.register(on_exit)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     logger = get_logger()
 
-    logger.info("Started")
-    logger.trace("Trace")
-    logger.debug("Debug")
-    logger.info("Info")
-    logger.success("Success")
-    logger.warning("Warning")
-    logger.error("Error")
-    logger.critical("Critical")
+    logger.info('Started')
+    logger.trace('Trace')
+    logger.debug('Debug')
+    logger.info('Info')
+    logger.success('Success')
+    logger.warning('Warning')
+    logger.error('Error')
+    logger.critical('Critical')
 
-    logger.info("Finished")
-    sys.exit(0)
+    logger.info('Finished')
     sys.exit(0)

@@ -1,18 +1,18 @@
 [project]
 name = "loguru-rich-sink"
-version = "0.0.3"
+version = "0.0.4"
 description = "A loguru sink that uses rich to format log messages."
 authors = [
     { name = "Max Ludden", email = "dev@maxludden.com" }
 ]
 dependencies = [
-    "rich>=13.8.1",
+    "rich>=14.2.0",
     "mypy>=1.11.2",
-    "rich-gradient>=0.1.7",
-    "loguru>=0.7.2",
+    "rich-gradient>=0.3.4",
+    "loguru>=0.7.3",
 ]
 readme = "README.md"
-requires-python = ">= 3.10"
+requires-python = ">= 3.13"
 
 [project.scripts]
 "loguru-rich-sink" = "loguru_rich_sink:main"
@@ -23,7 +23,9 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 managed = true
-dev-dependencies = []
+
+[dependency-groups]
+dev = ["ruff"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
