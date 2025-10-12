@@ -1,18 +1,21 @@
 """The Rich Sink for the loguru logger."""
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loguru import Message
+
+from rich.color import Color
 from rich.console import Console
 from rich.panel import Panel
-
 from rich.style import Style
-from rich.text import Text
+from rich.text import Text as RichText
 from rich.traceback import install as tr_install
-from rich_gradient import Color, Gradient
+from rich_gradient.text import Text
 
-def get_console(
-        record: bool = False,
-        console: Optional[Console] = None) -> Console:
+
+def get_console(record: bool = False, console: Console | None = None) -> Console:
     """Initialize the console and return it.
 
     Args:
@@ -22,27 +25,20 @@ def get_console(
         Console: A Rich console.
     """
     if console is None:
-        if record:
-            console = Console(record=True)
-        else:
-            console = Console()
+        console = Console(record=True) if record else Console()
     else:
-        console.record=True if record else False
-    tr_install(console=console)
+        console.record = bool(record)
+    _ = tr_install(console=console)
     return console
 
 
-FORMAT: str = (
-    "{time:HH:mm:ss.SSS} | Run {extra[run]} | {file.name: ^12} | Line {line} | {level} | {message}"
-)
+FORMAT: str = '{time:HH:mm:ss.SSS} | Run {extra[run]} | {file.name: ^12} | Line {line} | {level} | {message}'
 CWD: Path = Path.cwd()
-LOGS_DIR: Path = CWD / "logs"
-RUN_FILE: Path = LOGS_DIR / "run.txt"
+LOGS_DIR: Path = CWD / 'logs'
+RUN_FILE: Path = LOGS_DIR / 'run.txt'
 
 
-def find_cwd(
-    start_dir: Path = Path.cwd(),
-    verbose: bool = False) -> Path:
+def find_cwd(start_dir: Path | None = None, verbose: bool = False) -> Path:
     """Find the current working directory.
 
     Args:
@@ -52,29 +48,26 @@ def find_cwd(
     Returns:
         Path: The current working directory.
     """
-    cwd: Path = start_dir
-    while not (cwd / "pyproject.toml").exists():
+    cwd: Path = start_dir if start_dir is not None else Path.cwd()
+    while not (cwd / 'pyproject.toml').exists():
         cwd = cwd.parent
         if cwd == Path.home():
             break
     if verbose:
         console = get_console()
-        console.line(2)
+        _ = console.line(2)
+        gradient_title = Text(
+            'Current Working Directory',
+            colors=[Color.parse('#ff005f'), Color.parse('#ff00af'), Color.parse('#ff00ff')],
+            rainbow=False,
+        )
         console.print(
             Panel(
-                f"[i #5f00ff]{cwd.resolve()}",
-                title=Gradient(
-                    "Current Working Directory",
-                    colors=[
-                        Color("#ff005f"),
-                        Color("#ff00af"),
-                        Color("#ff00ff"),
-                    ],
-                    style="bold"
-                ).as_text()
+                f'[i #5f00ff]{cwd.resolve()}',
+                title=gradient_title,
             )
         )
-        console.line(2)
+        _ = console.line(2)
     return cwd
 
 
@@ -83,31 +76,30 @@ def setup() -> int:
     console = get_console()
     if not LOGS_DIR.exists():
         LOGS_DIR.mkdir(parents=True)
-        console.print(f"Created Logs Directory: {LOGS_DIR}")
+        console.print(f'Created Logs Directory: {LOGS_DIR}')
     if not RUN_FILE.exists():
-        with open(RUN_FILE, "w", encoding="utf-8") as f:
-            f.write("0")
-            console.print("Created Run File, Set to 0")
+        with open(RUN_FILE, 'w', encoding='utf-8') as f:
+            _ = f.write('0')
+            _ = console.print('Created Run File, Set to 0')
 
-    with open(RUN_FILE, "r", encoding="utf-8") as f:
-        run = int(f.read())
-        return run
+    with open(RUN_FILE, encoding='utf-8') as f:
+        return int(f.read())
 
 
 def read() -> int:
     """Read the run count from the file."""
     if not RUN_FILE.exists():
-        console.print("[b #ff0000]Run File Not Found[/][i #ff9900], Creating...[/]")
-        setup()
-    with open(RUN_FILE, "r", encoding="utf-8") as f:
-        run = int(f.read())
-    return run
+        console = get_console()
+        _ = console.print('[b #ff0000]Run File Not Found[/][i #ff9900], Creating...[/]')
+        _ = setup()
+    with open(RUN_FILE, encoding='utf-8') as f:
+        return int(f.read())
 
 
 def write(run: int) -> None:
     """Write the run count to the file."""
-    with open(RUN_FILE, "w", encoding="utf-8") as f:
-        f.write(str(run))
+    with open(RUN_FILE, 'w', encoding='utf-8') as f:
+        _ = f.write(str(run))
 
 
 def increment() -> int:
@@ -118,25 +110,26 @@ def increment() -> int:
     return run
 
 
-LEVEL_STYLES: Dict[str, Style] = {
-    "TRACE": Style(italic=True),
-    "DEBUG": Style(color="#aaaaaa"),
-    "INFO": Style(color="#00afff"),
-    "SUCCESS": Style(bold=True, color="#00ff00"),
-    "WARNING": Style(italic=True, color="#ffaf00"),
-    "ERROR": Style(bold=True, color="#ff5000"),
-    "CRITICAL": Style(bold=True, color="#ff0000"),
+LEVEL_STYLES: dict[str, Style] = {
+    'TRACE': Style(italic=True),
+    'DEBUG': Style(color='#aaaaaa'),
+    'INFO': Style(color='#00afff'),
+    'SUCCESS': Style(bold=True, color='#00ff00'),
+    'WARNING': Style(italic=True, color='#ffaf00'),
+    'ERROR': Style(bold=True, color='#ff5000'),
+    'CRITICAL': Style(bold=True, color='#ff0000'),
 }
 
-GRADIENTS: Dict[str, List[Color]] = {
-    "TRACE": [Color("#888888"), Color("#aaaaaa"), Color("#cccccc")],
-    "DEBUG": [Color("#338888"), Color("#55aaaa"), Color("#77cccc")],
-    "INFO": [Color("#008fff"), Color("#00afff"), Color("#00cfff")],
-    "SUCCESS": [Color("#00aa00"), Color("#00ff00"), Color("#afff00")],
-    "WARNING": [Color("#ffaa00"), Color("#ffcc00"), Color("#ffff00")],
-    "ERROR": [Color("#ff0000"), Color("#ff5500"), Color("#ff7700")],
-    "CRITICAL": [Color("#ff0000"), Color("#ff005f"), Color("#ff00af")],
+GRADIENTS: dict[str, list[Color]] = {
+    'TRACE': [Color.parse('#888888'), Color.parse('#aaaaaa'), Color.parse('#cccccc')],
+    'DEBUG': [Color.parse('#338888'), Color.parse('#55aaaa'), Color.parse('#77cccc')],
+    'INFO': [Color.parse('#008fff'), Color.parse('#00afff'), Color.parse('#00cfff')],
+    'SUCCESS': [Color.parse('#00aa00'), Color.parse('#00ff00'), Color.parse('#afff00')],
+    'WARNING': [Color.parse('#ffaa00'), Color.parse('#ffcc00'), Color.parse('#ffff00')],
+    'ERROR': [Color.parse('#ff0000'), Color.parse('#ff5500'), Color.parse('#ff7700')],
+    'CRITICAL': [Color.parse('#ff0000'), Color.parse('#ff005f'), Color.parse('#ff00af')],
 }
+
 
 class RichSink:
     """A loguru sink that uses the great `rich` library to print log messages.
@@ -149,92 +142,86 @@ initialized. Defaults to None.
 
 
     """
-    def __init__(self, run: Optional[int] = None, console: Optional[Console] = None) -> None:
+
+    def __init__(self, run: int | None = None, console: Console | None = None) -> None:
         if run is None:
             try:
                 run = read()
             except FileNotFoundError:
                 run = setup()
-        self.run = run
-        self.console = console or get_console()
+        self.run: int = run
+        self.console: Console = console or get_console()
 
-    def __call__(self, message) -> None:
+    def __call__(self, message: "Message") -> None:
         record = message.record
-        level = record["level"].name
+        level = record['level'].name
         colors = GRADIENTS[level]
         style = LEVEL_STYLES[level]
 
-        # title
-        title: Text = Gradient(
-            f" {level} | {record['file'].name} | Line {record['line']} ", colors=colors
-        ).as_text()
-        title.highlight_words("|", style="italic #666666")
-        title.stylize(Style(reverse=True))
+        # title with gradient
+        title = Text(f' {level} | {record["file"].name} | Line {record["line"]} ', colors=colors, rainbow=False)
 
         # subtitle
-        subtitle: Text = Text.assemble(
-            Text(f"Run {self.run}"),
-            Text(" | "),
-            Text(record["time"].strftime("%H:%M:%S.%f")[:-3]),
-            Text(record["time"].strftime(" %p")),
+        subtitle = RichText.assemble(
+            RichText(f'Run {self.run}'),
+            RichText(' | '),
+            RichText(record['time'].strftime('%H:%M:%S.%f')[:-3]),
+            RichText(record['time'].strftime(' %p')),
         )
-        subtitle.highlight_words(":", style="dim #aaaaaa")
+        _ = subtitle.highlight_words(':', style='dim #aaaaaa')
 
-        # Message
-        message_text: Text = Gradient(record["message"], colors, style="bold")
+        # Message with gradient
+        message_text = Text(record['message'], colors=colors, rainbow=False)
         # Generate and print log panel with aligned title and subtitle
         log_panel: Panel = Panel(
             message_text,
             title=title,
-            title_align="left",  # Left align the title
+            title_align='left',  # Left align the title
             subtitle=subtitle,
-            subtitle_align="right",  # Right align the subtitle
+            subtitle_align='right',  # Right align the subtitle
             border_style=style + Style(bold=True),
             padding=(1, 2),
         )
         self.console.print(log_panel)
 
-def rich_sink(message) -> None:
+
+def rich_sink(message: "Message") -> None:
     """A loguru sink that uses the great `rich` library to print log messages."""
     record = message.record
-    level = record["level"].name
+    level = record['level'].name
     colors = GRADIENTS[level]
     style = LEVEL_STYLES[level]
 
-    # title
-    title: Text = Gradient(
-        f" {level} | {record['file'].name} | Line {record['line']} ", colors=colors
-    ).as_text()
-    title.highlight_words("|", style="italic #999999")
-    title.stylize(Style(reverse=True))
+    # title with gradient
+    title = Text(f' {level} | {record["file"].name} | Line {record["line"]} ', colors=colors, rainbow=False)
 
     # subtitle
     run: int = read()
-    subtitle: Text = Text.assemble(
-        Text(f"Run {run}"),
-        Text(" | "),
-        Text(record["time"].strftime("%H:%M:%S.%f")[:-3]),
-        Text(record["time"].strftime(" %p")),
+    subtitle = RichText.assemble(
+        RichText(f'Run {run}'),
+        RichText(' | '),
+        RichText(record['time'].strftime('%H:%M:%S.%f')[:-3]),
+        RichText(record['time'].strftime(' %p')),
     )
-    subtitle.highlight_words(":", style="dim #aaaaaa")
+    _ = subtitle.highlight_words(':', style='dim #aaaaaa')
 
-    # Message
-    message_text: Text = Gradient(record["message"], colors, style="bold")
+    # Message with gradient
+    message_text = Text(record['message'], colors=colors, rainbow=False)
     # Generate and print log panel with aligned title and subtitle
     log_panel: Panel = Panel(
         message_text,
         title=title,
-        title_align="left",  # Left align the title
+        title_align='left',  # Left align the title
         subtitle=subtitle,
-        subtitle_align="right",  # Right align the subtitle
+        subtitle_align='right',  # Right align the subtitle
         border_style=style + Style(bold=True),
         padding=(1, 2),
     )
     console = get_console(True)
     console.print(log_panel)
-    record["extra"]["rich"] = console.export_text()
+    record['extra']['rich'] = console.export_text()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     console = get_console()
-    console.print("CWD:", find_cwd(verbose=True))
+    console.print('CWD:', find_cwd(verbose=True))
