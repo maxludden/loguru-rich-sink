@@ -82,8 +82,14 @@ def setup() -> int:
             _ = f.write('0')
             _ = console.print('Created Run File, Set to 0')
 
-    with open(RUN_FILE, encoding='utf-8') as f:
-        return int(f.read())
+    try:
+        with open(RUN_FILE, encoding='utf-8') as f:
+            run_str = f.read()
+            return int(run_str)
+    except ValueError:
+        if 'console' in locals():
+            console.print(f"[red]Error:[/red] RUN_FILE contains non-integer data: '{run_str}'. Returning 0.")
+        return 0
 
 
 def read() -> int:
