@@ -11,34 +11,28 @@ Example:
     logger.info("Hello, World!")
 """
 
+from rich.console import Console
+from rich.traceback import install as tr_install
+from rich_color_ext import install as rc_install
+
+from loguru_rich_sink.__main__ import main
 from loguru_rich_sink.sink import (
-    FORMAT,
-    GRADIENTS,
-    LEVEL_STYLES,
-    LOGS_DIR,
-    RUN_FILE,
     RichSink,
     get_console,
-    increment,
-    read,
-    rich_sink,
-    setup,
-    write,
+    get_logger,
+    get_progress,
 )
 
-__version__ = '0.0.3'
+console: Console = Console()
+tr_install(console=console)
+rc_install()
+
+__version__ = "0.0.4"
 
 __all__ = [
-    'FORMAT',
-    'GRADIENTS',
-    'LEVEL_STYLES',
-    'LOGS_DIR',
-    'RUN_FILE',
-    'RichSink',
-    'get_console',
-    'increment',
-    'read',
-    'rich_sink',
-    'setup',
-    'write',
+    "RichSink",
+    "get_console",
+    "get_logger",
+    "get_progress",
+    "main",
 ]
