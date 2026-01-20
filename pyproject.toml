@@ -8,8 +8,9 @@ authors = [
 dependencies = [
     "rich>=13.8.1",
     "mypy>=1.11.2",
-    "rich-gradient>=0.1.7",
     "loguru>=0.7.2",
+    "rich-color-ext>=0.1.9",
+    "rich-gradient>=0.3.9",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"
@@ -23,7 +24,6 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 managed = true
-dev-dependencies = []
 
 [tool.hatch.metadata]
 allow-direct-references = true
