@@ -115,6 +115,7 @@ class RichSink:
         "ERROR": Style(bold=True, color="#ff5000"),
         "CRITICAL": Style(color="#ffffff", bgcolor="#ff0000", bold=True),
     }
+    DEFAULT_LEVEL: str = "INFO"
 
     GRADIENTS: dict[str, list[str]] = {
         "TRACE": ["#888888", "#aaaaaa", "#cccccc"],
@@ -176,8 +177,8 @@ class RichSink:
         """Render a Loguru message as a Rich panel."""
         record = message.record
         level = record["level"].name
-        colors = self.GRADIENTS[level]
-        style = self.LEVEL_STYLES[level]
+        colors = self.GRADIENTS.get(level, self.GRADIENTS[self.DEFAULT_LEVEL])
+        style = self.LEVEL_STYLES.get(level, self.LEVEL_STYLES[self.DEFAULT_LEVEL])
 
         # title
         title: Text = Text(
@@ -189,11 +190,14 @@ class RichSink:
         # subtitle
         subtitle_lines: list[Text] = []
         if self.track_run:
-            run = self.read()
+            run = self.run
             if run is None:
-                run = self.setup()
+                run = self.read()
+                if run is None:
+                    run = self.setup()
             if run is not None:
                 self.run = run
+                record["extra"]["run"] = run
                 subtitle_lines.extend([Text(f"Run {run}"), Text(" | ")])
         subtitle_lines.extend([
             Text(record["time"].strftime("%H:%M:%S.%f")[:-3]),
@@ -289,13 +293,21 @@ def get_logger(
         handlers: Optional handler config(s) appended after the defaults.
 
     Returns:
-        A configured Loguru logger instance.
+        A configured Loguru logger instance with run tracking incremented.
     """
     if console is None:
         console = get_console()
     # active_logger = logger if logger is not None else loguru_logger
     sink = RichSink(console=console, track_run=track_run)
-    run = sink.setup() if track_run else None
+    run: int | None = None
+    if track_run:
+        run = sink.read()
+        if run is None:
+            run = sink.setup()
+        if run is not None:
+            run += 1
+            sink.write(run)
+            sink.run = run
     default_handlers: list[HandlerConfig] = [
         {
             "sink": sink,
