@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 import loguru
+from rich.color import Color
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import (
@@ -18,10 +20,9 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
-from rich.style import Style
+from rich.style import Style, StyleType
 from rich.text import Text as RichText
 from rich.traceback import install as tr_install
-from rich_gradient import Text
 
 if TYPE_CHECKING:
     from loguru import Logger as Logger1
@@ -37,6 +38,89 @@ else:
 CWD: Path = Path.cwd()
 LOGS_DIR: Path = CWD / "logs"
 RUN_FILE: Path = LOGS_DIR / "run.txt"
+LOGURU_HANDLER_ENV_PARAMS: tuple[str, ...] = (
+    "level",
+    "format",
+    "filter",
+    "colorize",
+    "backtrace",
+    "diagnose",
+    "enqueue",
+    "catch",
+)
+
+
+def _respect_loguru_environment(handler: HandlerConfig) -> HandlerConfig:
+    """Remove explicit handler defaults when Loguru environment vars are set.
+
+    Args:
+        handler: Handler configuration passed to ``logger.configure()``.
+
+    Returns:
+        The handler configuration with environment-controlled values omitted.
+    """
+    for param in LOGURU_HANDLER_ENV_PARAMS:
+        if f"LOGURU_{param.upper()}" in os.environ:
+            handler.pop(param, None)
+    return handler
+
+
+def _interpolate_hex_color(start: str, end: str, position: float) -> str:
+    """Return an interpolated hex color between two Rich color strings.
+
+    Args:
+        start: Starting color string parseable by Rich.
+        end: Ending color string parseable by Rich.
+        position: Interpolation position from 0.0 to 1.0.
+
+    Returns:
+        A hex color string for the interpolated position.
+    """
+    start_triplet = Color.parse(start).get_truecolor()
+    end_triplet = Color.parse(end).get_truecolor()
+    red = round(start_triplet.red + (end_triplet.red - start_triplet.red) * position)
+    green = round(
+        start_triplet.green + (end_triplet.green - start_triplet.green) * position
+    )
+    blue = round(
+        start_triplet.blue + (end_triplet.blue - start_triplet.blue) * position
+    )
+    return f"#{red:02x}{green:02x}{blue:02x}"
+
+
+def _gradient_text(
+    text: object, colors: Sequence[str], style: StyleType = ""
+) -> RichText:
+    """Return Rich text with a per-character color gradient.
+
+    Args:
+        text: Text or markup content to render.
+        colors: Color stops used for the gradient.
+        style: Base Rich style applied under the gradient colors.
+
+    Returns:
+        Rich text with interpolated foreground colors.
+    """
+    rich_text = RichText(str(text), style=style)
+    if not rich_text.plain or not colors:
+        return rich_text
+    if len(colors) == 1:
+        rich_text.stylize(Style(color=colors[0]))
+        return rich_text
+
+    last_index = max(len(rich_text.plain) - 1, 1)
+    segment_count = len(colors) - 1
+    for index in range(len(rich_text.plain)):
+        scaled_position = (index / last_index) * segment_count
+        segment_index = min(int(scaled_position), segment_count - 1)
+        segment_position = scaled_position - segment_index
+        color = _interpolate_hex_color(
+            colors[segment_index],
+            colors[segment_index + 1],
+            segment_position,
+        )
+        rich_text.stylize(Style(color=color), index, index + 1)
+    return rich_text
 
 
 def get_console(record: bool = False, console: Console | None = None) -> Console:
@@ -68,17 +152,18 @@ def find_cwd(start_dir: Path | None = None, verbose: bool = False) -> Path:
         The resolved project root directory.
     """
     cwd = start_dir if start_dir is not None else Path.cwd()
-    while not (cwd / 'pyproject.toml').exists():
-        cwd = cwd.parent
-        if cwd == Path.home():
+    while not (cwd / "pyproject.toml").exists():
+        parent = cwd.parent
+        if parent == cwd:
             break
+        cwd = parent
     if verbose:
         console = get_console()
         console.line(2)
         console.print(
             Panel(
                 f"[i #5f00ff]{cwd.resolve()}",
-                title=Text(
+                title=_gradient_text(
                     "Current Working Directory",
                     colors=[
                         "#ff005f",
@@ -146,6 +231,7 @@ class RichSink:
                 except FileNotFoundError:
                     run = self.setup()
             self.run = run
+
     @property
     def track_run(self) -> bool:
         """Whether this sink tracks a persistent run count."""
@@ -175,13 +261,13 @@ class RichSink:
         colors = self.GRADIENTS.get(level, self.GRADIENTS[self.DEFAULT_LEVEL])
         style = self.LEVEL_STYLES.get(level, self.LEVEL_STYLES[self.DEFAULT_LEVEL])
 
-        title: Text = Text(
+        title: RichText = _gradient_text(
             f" {level} | {record['file'].name} | Line {record['line']} ", colors=colors
         )
         title.highlight_words("|", style="italic #666666")
         title.stylize(Style(reverse=True))
 
-        subtitle_lines: list[Text] = []
+        subtitle_lines: list[RichText] = []
         if self.track_run:
             run = self.run
             if run is None:
@@ -191,16 +277,20 @@ class RichSink:
             if run is not None:
                 self.run = run
                 record["extra"]["run"] = run
-                subtitle_lines.extend([Text(f"Run {run}"), Text(" | ")])
-        subtitle_lines.extend([
-            Text(record["time"].strftime("%H:%M:%S.%f")[:-3]),
-            Text(record["time"].strftime(" %p")),
-        ])
+                subtitle_lines.extend([RichText(f"Run {run}"), RichText(" | ")])
+        subtitle_lines.extend(
+            [
+                RichText(record["time"].strftime("%H:%M:%S.%f")[:-3]),
+                RichText(record["time"].strftime(" %p")),
+            ]
+        )
 
         subtitle: RichText = RichText.assemble(*subtitle_lines)
         subtitle.highlight_words(":", style="dim #aaaaaa")
 
-        message_text: Text = Text(record["message"], colors, style="bold")
+        message_text: RichText = _gradient_text(
+            str(message).rstrip("\n"), colors, style="bold"
+        )
         log_panel: Panel = Panel(
             message_text,
             title=title,
@@ -300,28 +390,35 @@ def get_logger(
             sink.write_run(run)
             sink.run = run
     default_handlers: list[HandlerConfig] = [
-        {
-            "sink": sink,
-            "format": "{message}",
-            "level": "INFO",
-            "backtrace": True,
-            "diagnose": True,
-            "colorize": False,
-        }
+        _respect_loguru_environment(
+            {
+                "sink": sink,
+                "format": "{message}",
+                "level": "INFO",
+                "backtrace": True,
+                "diagnose": True,
+                "colorize": False,
+                "serialize": False,
+            }
+        )
     ]
     if track_run:
         _format: str = (
             "{time:HH:mm:ss.SSS} | Run {extra[run]} | {file.name: ^12} | Line {line} \
 | {level} | {message}"
         )
-        default_handlers.append({
-            "sink": str(LOGS_DIR / "trace.log"),
-            "format": _format,
-            "level": "TRACE",
-            "backtrace": True,
-            "diagnose": True,
-            "colorize": False,
-        })
+        default_handlers.append(
+            _respect_loguru_environment(
+                {
+                    "sink": str(LOGS_DIR / "trace.log"),
+                    "format": _format,
+                    "level": "TRACE",
+                    "backtrace": True,
+                    "diagnose": True,
+                    "colorize": False,
+                }
+            )
+        )
     if handlers:
         if isinstance(handlers, dict):
             default_handlers.append(cast(HandlerConfig, handlers))

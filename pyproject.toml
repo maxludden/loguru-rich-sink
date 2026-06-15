@@ -9,8 +9,6 @@ dependencies = [
     "rich>=15.0.0",
     "mypy>=2.1.0",
     "loguru>=0.7.3",
-    "rich-color-ext>=0.1.9",
-    "rich-gradient>=0.3.13",
 ]
 readme = "README.md"
 requires-python = ">= 3.13"

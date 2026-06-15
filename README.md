@@ -6,8 +6,8 @@ A beautiful, feature-rich sink for [Loguru](https://github.com/Delgan/loguru) th
 
 ✨ **Beautiful Terminal Output** - Log messages displayed in Rich panels with gradient colors  
 🎨 **Level-Specific Styling** - Each log level has unique colors and gradients  
-📊 **Run Tracking** - Automatic tracking and incrementing of run numbers  
-📝 **Dual Logging** - Console output with Rich formatting + file logging  
+📊 **Run Tracking** - Optional tracking and incrementing of run numbers  
+📝 **Trace File Logging** - Write detailed trace logs when run tracking is enabled  
 🔧 **Highly Customizable** - Configure console, styles, and log formats  
 🐍 **Type-Safe** - Full type hints for better IDE support  
 ⚡ **Easy Integration** - Drop-in replacement for standard loguru sinks
@@ -28,8 +28,7 @@ uv add loguru-rich-sink
 
 - Python >= 3.13
 - loguru >= 0.7.3
-- rich >= 14.2.0
-- rich-gradient >= 0.3.4
+- rich >= 15.0.0
 
 ## Quick Start
 
@@ -38,6 +37,7 @@ from loguru import logger
 from loguru_rich_sink import RichSink
 
 # Add the RichSink to your logger
+logger.remove()
 logger.add(RichSink(), format="{message}")
 
 # Start logging with beautiful output!
@@ -57,6 +57,7 @@ The simplest way to use loguru-rich-sink:
 from loguru import logger
 from loguru_rich_sink import RichSink
 
+logger.remove()
 logger.add(RichSink(), format="{message}")
 
 logger.trace("Trace message")
@@ -66,16 +67,6 @@ logger.success("Success message")
 logger.warning("Warning message")
 logger.error("Error message")
 logger.critical("Critical message")
-```
-
-### Using the Function-Based Sink
-
-```python
-from loguru import logger
-from loguru_rich_sink import rich_sink
-
-logger.add(rich_sink, format="{message}")
-logger.info("This also works!")
 ```
 
 ### Custom Console
@@ -91,48 +82,55 @@ from loguru_rich_sink import RichSink
 console = Console(width=120, force_terminal=True)
 
 # Use it with RichSink
+logger.remove()
 logger.add(RichSink(console=console), format="{message}")
 ```
 
-### Full Logger Setup with Dual Sinks
+### Logger Helper
 
-The package includes a complete logger setup with both console and file logging:
+The package includes a helper that removes Loguru's default handlers and configures a RichSink console handler:
 
 ```python
 from loguru_rich_sink import get_logger
 
-# This sets up both Rich console output and file logging
 logger = get_logger()
 
-logger.info("Logged to both console and file!")
+logger.info("Logged with Rich formatting!")
 ```
 
 This configuration:
 - Displays logs in the console using RichSink with beautiful formatting
-- Writes detailed logs to `logs/trace.log` with full formatting
-- Tracks run numbers automatically
 - Enables backtrace and diagnose for better debugging
+
+Pass `track_run=True` to also persist a run counter and write detailed trace logs to `logs/trace.log`:
+
+```python
+from loguru_rich_sink import get_logger
+
+logger = get_logger(track_run=True)
+
+logger.info("Logged to the console and trace file!")
+```
 
 ### Run Tracking
 
-The package automatically tracks how many times your application has been run:
+Run tracking is available through `RichSink` methods:
 
 ```python
-from loguru_rich_sink import read, increment, setup
+from loguru_rich_sink import RichSink
 
-# Initialize run tracking (creates logs directory and run file)
-run = setup()
+sink = RichSink(track_run=True)
 
-# Read current run number
-current_run = read()
+# Initialize run tracking storage (creates logs directory and run file)
+current_run = sink.setup()
 print(f"Current run: {current_run}")
 
 # Increment run number
-next_run = increment()
+next_run = sink.increment()
 print(f"Next run: {next_run}")
 ```
 
-Run numbers are displayed in the subtitle of each log panel.
+When `track_run=True`, run numbers are displayed in the subtitle of each log panel.
 
 ## Log Levels and Styling
 
@@ -140,11 +138,11 @@ Each log level has its own distinct visual style:
 
 | Level    | Colors | Style |
 |----------|--------|-------|
-| TRACE    | Gray gradient | Italic |
+| TRACE    | Gray gradient | Dim |
 | DEBUG    | Cyan/teal gradient | Default |
 | INFO     | Blue gradient | Default |
 | SUCCESS  | Green gradient | Bold |
-| WARNING  | Yellow/orange gradient | Italic |
+| WARNING  | Yellow/orange gradient | Bold |
 | ERROR    | Orange/red gradient | Bold |
 | CRITICAL | Red/magenta gradient | Bold |
 
@@ -157,36 +155,22 @@ The main sink class for loguru.
 ```python
 class RichSink:
     def __init__(
-        self, 
+        self,
+        track_run: bool = False,
         run: int | None = None, 
         console: Console | None = None
     ) -> None:
 ```
 
 **Parameters:**
-- `run` (int | None): The current run number. If None, reads from file.
+- `track_run` (bool): Whether to track and persist the run count.
+- `run` (int | None): Optional initial run number.
 - `console` (Console | None): A Rich Console instance. If None, creates a new one.
 
 **Usage:**
 ```python
 sink = RichSink(run=1, console=my_console)
 logger.add(sink, format="{message}")
-```
-
-### rich_sink
-
-A function-based alternative to RichSink.
-
-```python
-def rich_sink(message: Message) -> None:
-```
-
-**Parameters:**
-- `message` (Message): The loguru message object.
-
-**Usage:**
-```python
-logger.add(rich_sink, format="{message}")
 ```
 
 ### Helper Functions
@@ -205,72 +189,53 @@ Initialize and return a Rich console with traceback support.
 #### get_logger
 
 ```python
-def get_logger() -> Logger:
+def get_logger(
+    console: Console | None = None,
+    track_run: bool = False,
+    handlers: Sequence[dict[str, Any]] | dict[str, Any] | None = None,
+) -> Logger:
 ```
 
-Get a fully configured logger with both Rich console sink and file sink.
+Get a configured Loguru logger with a Rich console sink. When `track_run=True`, it also increments the run counter and adds `logs/trace.log` as a trace-level file sink.
 
-#### setup
+#### get_progress
 
 ```python
-def setup() -> int:
+def get_progress(console: Console | None = None) -> Progress:
 ```
 
-Initialize the logging directory structure and return the current run number.
+Return a Rich progress bar configured to match the logger output.
 
-#### read
+#### find_cwd
 
 ```python
-def read() -> int:
+def find_cwd(start_dir: Path | None = None, verbose: bool = False) -> Path:
 ```
 
-Read the current run number from the run file.
-
-#### write
-
-```python
-def write(run: int) -> None:
-```
-
-Write a run number to the run file.
-
-#### increment
-
-```python
-def increment() -> int:
-```
-
-Increment the run counter and return the new run number.
+Walk upward from `start_dir` or the current working directory until a `pyproject.toml` is found. If none is found, the search stops at the filesystem root.
 
 ## Constants
 
-### FORMAT
-
-Default log format string:
-```python
-FORMAT = '{time:HH:mm:ss.SSS} | Run {extra[run]} | {file.name: ^12} | Line {line} | {level} | {message}'
-```
-
 ### LEVEL_STYLES
 
-Dictionary mapping log levels to Rich Style objects:
+`RichSink.LEVEL_STYLES` maps log levels to Rich Style objects:
 ```python
 LEVEL_STYLES: dict[str, Style] = {
-    'TRACE': Style(italic=True),
+    'TRACE': Style(dim=True),
     'DEBUG': Style(color='#aaaaaa'),
     'INFO': Style(color='#00afff'),
     'SUCCESS': Style(bold=True, color='#00ff00'),
-    'WARNING': Style(italic=True, color='#ffaf00'),
+    'WARNING': Style(bold=True, color='#ffaf00'),
     'ERROR': Style(bold=True, color='#ff5000'),
-    'CRITICAL': Style(bold=True, color='#ff0000'),
+    'CRITICAL': Style(color='#ffffff', bgcolor='#ff0000', bold=True),
 }
 ```
 
 ### GRADIENTS
 
-Dictionary mapping log levels to color gradients:
+`RichSink.GRADIENTS` maps log levels to color gradients:
 ```python
-GRADIENTS: dict[str, list[Color]] = {
+GRADIENTS: dict[str, list[str]] = {
     'TRACE': [...],    # Gray gradient
     'DEBUG': [...],    # Cyan gradient
     'INFO': [...],     # Blue gradient
@@ -284,8 +249,8 @@ GRADIENTS: dict[str, list[Color]] = {
 ### Paths
 
 ```python
-LOGS_DIR: Path  # Path to logs directory (defaults to ./logs)
-RUN_FILE: Path  # Path to run counter file (defaults to ./logs/run.txt)
+LOGS_DIR: Path  # Path to logs directory
+RUN_FILE: Path  # Path to run counter file
 ```
 
 ## Advanced Usage
@@ -296,7 +261,7 @@ You can customize the log format while still using RichSink:
 
 ```python
 from loguru import logger
-from loguru_rich_sink import RichSink, FORMAT
+from loguru_rich_sink import RichSink
 
 logger.remove()
 logger.add(
@@ -348,6 +313,8 @@ from loguru import logger
 from loguru_rich_sink import RichSink
 
 # Keep your existing sinks and add Rich output
+# Omit remove() here if you intentionally want to keep existing handlers.
+logger.remove()
 logger.add(RichSink(), format="{message}", level="INFO")
 
 # Your existing logging code works as-is
@@ -356,7 +323,7 @@ logger.info("Now with beautiful Rich formatting!")
 
 ## Example Output
 
-When you run your application, logs appear as beautifully formatted panels:
+When run tracking is enabled, logs appear as beautifully formatted panels with the run number in the subtitle:
 
 ```
 ┌─ INFO | app.py | Line 42 ──────────────────────────────────────┬─ Run 1 | 14:23:45.123 PM ─┐
@@ -376,7 +343,7 @@ To see loguru-rich-sink in action:
 python -m loguru_rich_sink
 ```
 
-This will display all log levels with their respective styling.
+This displays the INFO, SUCCESS, WARNING, ERROR, and CRITICAL demo messages with their respective styling. TRACE and DEBUG records are filtered by the demo's INFO-level console handler.
 
 ## File Structure
 
@@ -387,7 +354,7 @@ loguru-rich-sink/
 │       ├── __init__.py      # Package exports
 │       ├── __main__.py      # Demo/example usage
 │       └── sink.py          # Core implementation
-├── logs/                    # Created automatically
+├── logs/                    # Created automatically when run tracking is enabled
 │   ├── run.txt             # Run counter
 │   └── trace.log           # Log file
 ├── pyproject.toml          # Project metadata
@@ -406,18 +373,18 @@ cd loguru-rich-sink
 # Install with uv (recommended)
 uv sync
 
-# Or with pip
-pip install -e ".[dev]"
+# Or install the package in editable mode
+pip install -e .
 ```
 
 ### Running Tests
 
 ```bash
-# Run the demo
-python -m loguru_rich_sink
+# Run tests
+uv run pytest
 
-# Run with custom console width
-python -c "from rich.console import Console; from loguru_rich_sink import RichSink; from loguru import logger; logger.add(RichSink(console=Console(width=80)), format='{message}'); logger.info('Test')"
+# Run linting
+uv run ruff check .
 ```
 
 ## Contributing
@@ -432,7 +399,6 @@ This project is open source. Please check the repository for license information
 
 - Built with [Loguru](https://github.com/Delgan/loguru) by [@Delgan](https://github.com/Delgan)
 - Styled with [Rich](https://github.com/Textualize/rich) by [@willmcgugan](https://github.com/willmcgugan)
-- Uses [rich-gradient](https://github.com/maxludden/rich-gradient) for gradient text
 
 ## Author
 
@@ -458,7 +424,6 @@ GitHub: [@maxludden](https://github.com/maxludden)
 
 - [loguru](https://github.com/Delgan/loguru) - Python logging made (stupidly) simple
 - [rich](https://github.com/Textualize/rich) - Rich text and beautiful formatting in the terminal
-- [rich-gradient](https://github.com/maxludden/rich-gradient) - Gradient text for Rich
 
 ---
 
