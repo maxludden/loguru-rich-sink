@@ -36,3 +36,8 @@ packages = ["src/loguru_rich_sink"]
 
 [tool.mypy]
 ignore_missing_imports = true
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = [
+    "W0603" #       global-statement
+]

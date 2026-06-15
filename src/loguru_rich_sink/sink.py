@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-# import atexit
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 import loguru
 from rich.console import Console
@@ -40,7 +39,7 @@ LOGS_DIR: Path = CWD / "logs"
 RUN_FILE: Path = LOGS_DIR / "run.txt"
 
 
-def get_console(record: bool = False, console: Optional[Console] = None) -> Console:
+def get_console(record: bool = False, console: Console | None = None) -> Console:
     """Return a Rich console with rich tracebacks enabled.
 
     Args:
@@ -51,24 +50,24 @@ def get_console(record: bool = False, console: Optional[Console] = None) -> Cons
         A Rich console configured for this sink.
     """
     if console is None:
-        console = Console(record=True) if record else Console()
+        console = Console(record=record)
     else:
-        console.record = True if record else False
+        console.record = record
     tr_install(console=console)
     return console
 
 
-def find_cwd(start_dir: Path = Path.cwd(), verbose: bool = False) -> Path:
+def find_cwd(start_dir: Path | None = None, verbose: bool = False) -> Path:
     """Find the project root by walking up to a pyproject.toml.
 
     Args:
-        start_dir: Directory to begin the search from.
+        start_dir: Optional directory to begin the search from.
         verbose: Whether to print the resolved working directory panel.
 
     Returns:
         The resolved project root directory.
     """
-    cwd: Path = start_dir if start_dir is not None else Path.cwd()
+    cwd = start_dir if start_dir is not None else Path.cwd()
     while not (cwd / 'pyproject.toml').exists():
         cwd = cwd.parent
         if cwd == Path.home():
@@ -127,8 +126,8 @@ class RichSink:
     def __init__(
         self,
         track_run: bool = False,
-        run: Optional[int] = None,
-        console: Optional[Console] = None,
+        run: int | None = None,
+        console: Console | None = None,
     ) -> None:
         """Initialize a Rich sink for Loguru logging.
 
@@ -138,7 +137,7 @@ class RichSink:
             console: Optional Rich console to render to.
         """
         self.console = console or get_console()
-        self.run: Optional[int] = run
+        self.run: int | None = run
         self.track_run = track_run
         if self.track_run:
             if run is None:
@@ -156,7 +155,7 @@ class RichSink:
     def track_run(self, value: bool) -> None:
         """Enable or disable run count tracking."""
         if not isinstance(value, bool):
-            raise NotImplementedError(f"Invalid track_run value: {type(value)}")
+            raise TypeError(f"track_run must be bool, got {type(value).__name__}")
         self._track_run = value
 
     @property
@@ -176,14 +175,12 @@ class RichSink:
         colors = self.GRADIENTS.get(level, self.GRADIENTS[self.DEFAULT_LEVEL])
         style = self.LEVEL_STYLES.get(level, self.LEVEL_STYLES[self.DEFAULT_LEVEL])
 
-        # title
         title: Text = Text(
             f" {level} | {record['file'].name} | Line {record['line']} ", colors=colors
         )
         title.highlight_words("|", style="italic #666666")
         title.stylize(Style(reverse=True))
 
-        # subtitle
         subtitle_lines: list[Text] = []
         if self.track_run:
             run = self.run
@@ -203,15 +200,13 @@ class RichSink:
         subtitle: RichText = RichText.assemble(*subtitle_lines)
         subtitle.highlight_words(":", style="dim #aaaaaa")
 
-        # Message
         message_text: Text = Text(record["message"], colors, style="bold")
-        # Generate and print log panel with aligned title and subtitle
         log_panel: Panel = Panel(
             message_text,
             title=title,
-            title_align='left',  # Left align the title
+            title_align="left",
             subtitle=subtitle,
-            subtitle_align='right',  # Right align the subtitle
+            subtitle_align="right",
             border_style=style + Style(bold=True),
             padding=(1, 2),
         )
@@ -226,20 +221,18 @@ class RichSink:
         Returns:
             The current run count when tracking is enabled, otherwise None.
         """
+        if not self.track_run:
+            return None
+        if not LOGS_DIR.exists():
+            LOGS_DIR.mkdir(parents=True)
+            self.console.print(f"Created Logs Directory: {LOGS_DIR}")
+        if not RUN_FILE.exists():
+            with open(RUN_FILE, "w", encoding="utf-8") as f:
+                f.write("0")
+                self.console.print("Created Run File, Set to 0")
 
-        if self.track_run:
-            if not LOGS_DIR.exists():
-                LOGS_DIR.mkdir(parents=True)
-                self.console.print(f"Created Logs Directory: {LOGS_DIR}")
-            if not RUN_FILE.exists():
-                with open(RUN_FILE, "w", encoding="utf-8") as f:
-                    f.write("0")
-                    self.console.print("Created Run File, Set to 0")
-
-            with open(RUN_FILE, "r", encoding="utf-8") as f:
-                run = int(f.read())
-                return run
-        return None
+        with open(RUN_FILE, "r", encoding="utf-8") as f:
+            return int(f.read())
 
     def read(self) -> int | None:
         """Read the current run count from disk.
@@ -247,40 +240,40 @@ class RichSink:
         Returns:
             The persisted run count when tracking is enabled, otherwise None.
         """
-        if self.track_run:
-            if not RUN_FILE.exists():
-                self.console.print(
-                    "[b #ff0000]Run File Not Found[/][i #ff9900], Creating...[/]"
-                )
-                self.setup()
-            with open(RUN_FILE, "r", encoding="utf-8") as f:
-                run = int(f.read())
-            return run
-        return None
+        if not self.track_run:
+            return None
+        if not RUN_FILE.exists():
+            self.console.print(
+                "[b #ff0000]Run File Not Found[/][i #ff9900], Creating...[/]"
+            )
+            self.setup()
+        with open(RUN_FILE, "r", encoding="utf-8") as f:
+            return int(f.read())
 
     def write_run(self, run: int) -> None:
         """Persist the run count to disk."""
-        if self.track_run:
-            with open(RUN_FILE, "w", encoding="utf-8") as f:
-                f.write(str(run))
+        if not self.track_run:
+            return
+        with open(RUN_FILE, "w", encoding="utf-8") as f:
+            f.write(str(run))
 
     def increment(self) -> int | None:
         """Increment the run count and persist it."""
-        if self.track_run:
-            run = self.read()
-            if run is None:
-                return None
-            run += 1
-            self.write_run(run)
-            return run
-        return None
+        if not self.track_run:
+            return None
+        run = self.read()
+        if run is None:
+            return None
+        run += 1
+        self.write_run(run)
+        return run
 
 
 run_sink: RichSink | None = None
 
 
 def get_logger(
-    console: Optional[Console] = None,
+    console: Console | None = None,
     track_run: bool = False,
     handlers: Sequence[HandlerConfig] | HandlerConfig | None = None,
 ) -> Logger:
@@ -296,7 +289,6 @@ def get_logger(
     """
     if console is None:
         console = get_console()
-    # active_logger = logger if logger is not None else loguru_logger
     sink = RichSink(console=console, track_run=track_run)
     run: int | None = None
     if track_run:
@@ -332,10 +324,10 @@ def get_logger(
         })
     if handlers:
         if isinstance(handlers, dict):
-            default_handlers.append(handlers)
+            default_handlers.append(cast(HandlerConfig, handlers))
         else:
             default_handlers.extend(handlers)
-    global run_sink  # pylint: disable=W0601 global-statement
+    global run_sink
     run_sink = sink
     logger.remove()
     logger.configure(
@@ -345,7 +337,7 @@ def get_logger(
     return logger
 
 
-def get_progress(console: Optional[Console] = None) -> Progress:
+def get_progress(console: Console | None = None) -> Progress:
     """Return a Rich progress bar configured to match the logger output.
 
     Args:
@@ -359,7 +351,7 @@ def get_progress(console: Optional[Console] = None) -> Progress:
     progress = Progress(
         SpinnerColumn(spinner_name="point"),
         TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
+        BarColumn(bar_width=None),
         TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         TimeElapsedColumn(),
         TimeRemainingColumn(),
@@ -371,25 +363,7 @@ def get_progress(console: Optional[Console] = None) -> Progress:
     return progress
 
 
-# def on_exit() -> None:
-#     """Finalize the run tracking state on interpreter exit."""
-#     if run_sink is None or not run_sink.track_run:
-#         return
-#     try:
-#         run = run_sink.read()
-#         logger.info(f"Run {run} Completed")
-#     except FileNotFoundError as fnfe:
-#         logger.error(fnfe)
-#         run = run_sink.setup()
-#         logger.info(f"Run {run} Completed")
-#     run_sink.increment()
-
-
-# atexit.register(on_exit)
-
-
 if __name__ == "__main__":
-
     _console = get_console()
     rich_sink = RichSink(console=_console)
 
