@@ -1,6 +1,6 @@
 [project]
 name = "loguru-rich-sink"
-version = "0.0.4"
+version = "0.0.5"
 description = "A loguru sink that uses rich to format log messages."
 authors = [
     { name = "Max Ludden", email = "dev@maxludden.com" }
