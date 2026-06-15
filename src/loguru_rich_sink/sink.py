@@ -5,7 +5,7 @@ from __future__ import annotations
 # import atexit
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, TypeAlias
+from typing import TYPE_CHECKING, Any, Optional, TypeAlias, cast
 
 import loguru
 from rich.console import Console
@@ -75,7 +75,7 @@ def find_cwd(start_dir: Path = Path.cwd(), verbose: bool = False) -> Path:
             break
     if verbose:
         console = get_console()
-        _ = console.line(2)
+        console.line(2)
         console.print(
             Panel(
                 f"[i #5f00ff]{cwd.resolve()}",
@@ -137,6 +137,7 @@ class RichSink:
             run: Optional initial run number.
             console: Optional Rich console to render to.
         """
+        self.console = console or get_console()
         self.run: Optional[int] = run
         self.track_run = track_run
         if self.track_run:
@@ -146,8 +147,6 @@ class RichSink:
                 except FileNotFoundError:
                     run = self.setup()
             self.run = run
-        self.console = console or get_console()
-
     @property
     def track_run(self) -> bool:
         """Whether this sink tracks a persistent run count."""
@@ -219,7 +218,7 @@ class RichSink:
 
         self.console.print(log_panel)
         if self.console.record:
-            record["extra"]["rich"] = self.console.export_text()
+            record["extra"]["rich"] = self.console.export_text(clear=False)
 
     def setup(self) -> int | None:
         """Initialize run tracking storage and return the current run count.
@@ -259,7 +258,7 @@ class RichSink:
             return run
         return None
 
-    def write(self, run: int) -> None:
+    def write_run(self, run: int) -> None:
         """Persist the run count to disk."""
         if self.track_run:
             with open(RUN_FILE, "w", encoding="utf-8") as f:
@@ -272,9 +271,12 @@ class RichSink:
             if run is None:
                 return None
             run += 1
-            self.write(run)
+            self.write_run(run)
             return run
         return None
+
+
+run_sink: RichSink | None = None
 
 
 def get_logger(
@@ -303,7 +305,7 @@ def get_logger(
             run = sink.setup()
         if run is not None:
             run += 1
-            sink.write(run)
+            sink.write_run(run)
             sink.run = run
     default_handlers: list[HandlerConfig] = [
         {
@@ -337,7 +339,7 @@ def get_logger(
     run_sink = sink
     logger.remove()
     logger.configure(
-        handlers=default_handlers,
+        handlers=cast(Any, default_handlers),
         extra={"run": run},
     )
     return logger

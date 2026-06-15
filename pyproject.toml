@@ -26,7 +26,7 @@ build-backend = "hatchling.build"
 managed = true
 
 [dependency-groups]
-dev = ["ruff"]
+dev = ["pytest", "ruff"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
