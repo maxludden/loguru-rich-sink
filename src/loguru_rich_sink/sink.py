@@ -262,7 +262,7 @@ class RichSink:
         style = self.LEVEL_STYLES.get(level, self.LEVEL_STYLES[self.DEFAULT_LEVEL])
 
         title: RichText = _gradient_text(
-            f" {level} | {record['file'].name} | Line {record['line']} ", colors=colors
+            f" {level} | {record['file'].name} | {func_part}Line {record['line']} ", colors=colors
         )
         title.highlight_words("|", style="italic #666666")
         title.stylize(Style(reverse=True))
@@ -280,7 +280,7 @@ class RichSink:
                 subtitle_lines.extend([RichText(f"Run {run}"), RichText(" | ")])
         subtitle_lines.extend(
             [
-                RichText(record["time"].strftime("%H:%M:%S.%f")[:-3]),
+                RichText(record["time"].strftime("%d/%m/%y %H:%M:%S.%f")[:-3]),
                 RichText(record["time"].strftime(" %p")),
             ]
         )
