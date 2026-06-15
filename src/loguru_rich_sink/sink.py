@@ -197,6 +197,9 @@ class RichSink:
         "CRITICAL": Style(color="#ffffff", bgcolor="#ff0000", bold=True),
     }
     DEFAULT_LEVEL: str = "INFO"
+    ANSI_TRACEBACK_LEVELS: frozenset[str] = frozenset(
+        {"WARNING", "ERROR", "CRITICAL"}
+    )
 
     GRADIENTS: dict[str, list[str]] = {
         "TRACE": ["#888888", "#aaaaaa", "#cccccc"],
@@ -204,7 +207,7 @@ class RichSink:
         "INFO": ["#008fff", "#00afff", "#00cfff"],
         "SUCCESS": ["#00aa00", "#00ff00", "#afff00"],
         "WARNING": ["#ffaa00", "#ffcc00", "#ffff00"],
-        "ERROR": ["#ff0000", "#ff5500", "#ff7700"],
+        "ERROR": ["#FF7700", "#ff5500", "#ff0000"],
         "CRITICAL": ["#ff0000", "#ff005f", "#ff00af"],
     }
 
@@ -260,11 +263,14 @@ class RichSink:
         level = record["level"].name
         colors = self.GRADIENTS.get(level, self.GRADIENTS[self.DEFAULT_LEVEL])
         style = self.LEVEL_STYLES.get(level, self.LEVEL_STYLES[self.DEFAULT_LEVEL])
+        function = record.get("function")
+        function_part = f":{function}" if function and function != "<module>" else ""
+        location = f"{record['file'].name}{function_part}:{record['line']}"
 
         title: RichText = _gradient_text(
-            f" {level} | {record['file'].name} | {func_part}Line {record['line']} ", colors=colors
+            f" {record['level'].icon} {level} {record['level'].icon} | {location} ",
+            colors=colors,
         )
-        title.highlight_words("|", style="italic #666666")
         title.stylize(Style(reverse=True))
 
         subtitle_lines: list[RichText] = []
@@ -280,7 +286,7 @@ class RichSink:
                 subtitle_lines.extend([RichText(f"Run {run}"), RichText(" | ")])
         subtitle_lines.extend(
             [
-                RichText(record["time"].strftime("%d/%m/%y %H:%M:%S.%f")[:-3]),
+                RichText(record["time"].strftime("%Y/%m/%d %H:%M:%S.%f")[:-3]), # "%Y/%m/%d %H:%M:%S.%f" --- IGNORE ---
                 RichText(record["time"].strftime(" %p")),
             ]
         )
@@ -288,9 +294,11 @@ class RichSink:
         subtitle: RichText = RichText.assemble(*subtitle_lines)
         subtitle.highlight_words(":", style="dim #aaaaaa")
 
-        message_text: RichText = _gradient_text(
-            str(message).rstrip("\n"), colors, style="bold"
-        )
+        raw_message = str(message).rstrip("\n")
+        if level in self.ANSI_TRACEBACK_LEVELS and record["exception"] is not None:
+            message_text = RichText.from_ansi(raw_message)
+        else:
+            message_text = _gradient_text(raw_message, colors, style="bold")
         log_panel: Panel = Panel(
             message_text,
             title=title,
@@ -397,7 +405,7 @@ def get_logger(
                 "level": "INFO",
                 "backtrace": True,
                 "diagnose": True,
-                "colorize": False,
+                "colorize": True,
                 "serialize": False,
             }
         )

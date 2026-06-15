@@ -9,9 +9,17 @@ logger.remove()
 logger.add(RichSink(), format="{message}")
 
 # Start logging with beautiful output!
-logger.trace("This is a trace message")
-logger.debug("This is a debug message")
-logger.info("Hello, World!")
-logger.success("Operation completed successfully!")
-logger.warning("This is a warning message")
-logger.error("An error occurred")
+def test_rich_sink() -> None:
+    """Test function to demonstrate RichSink output."""
+    logger.trace("This is a trace message")
+    logger.debug("This is a debug message")
+    logger.info("Hello, World!")
+    logger.success("Operation completed successfully!")
+    logger.warning("This is a warning message")
+    logger.error("An error occurred")
+    logger.critical("Critical issue! Immediate attention required!")
+    # error = 1/0
+
+if __name__ == "__main__":
+    test_rich_sink()
+    logger.info("Finished testing RichSink output.")

@@ -14,9 +14,25 @@ from types import FrameType
 import pytest
 from loguru import logger
 from rich.console import Console
+from rich.panel import Panel
 
 from loguru_rich_sink import sink as sink_module
 from loguru_rich_sink.sink import RichSink, find_cwd, get_logger
+
+
+class _PanelCaptureConsole:
+    """Minimal console test double that captures rendered panels."""
+
+    record = False
+
+    def __init__(self) -> None:
+        """Initialize an empty panel capture list."""
+        self.panels: list[Panel] = []
+
+    def print(self, renderable: object) -> None:
+        """Capture Rich panels printed by the sink."""
+        if isinstance(renderable, Panel):
+            self.panels.append(renderable)
 
 
 def _configure_run_paths(tmp_path: Path) -> None:
@@ -168,6 +184,33 @@ def test_rich_sink_preserves_literal_bracketed_message_text() -> None:
 
     output = console.export_text()
     assert "literal [abc] bracket" in output
+
+
+@pytest.mark.parametrize("level", ["WARNING", "ERROR", "CRITICAL"])
+def test_exception_traceback_decodes_ansi_text_for_error_levels(level: str) -> None:
+    """Ensure colored Loguru tracebacks render as Rich text without raw ANSI."""
+    console = _PanelCaptureConsole()
+    sink = RichSink(console=console)  # type: ignore[arg-type]
+    logger.remove()
+    logger.add(
+        sink,
+        format="{message}",
+        colorize=True,
+        backtrace=True,
+        diagnose=True,
+    )
+
+    try:
+        1 / 0
+    except ZeroDivisionError:
+        logger.opt(exception=True).log(level, "failed calculation")
+
+    assert console.panels
+    rendered_text = console.panels[-1].renderable
+    assert isinstance(rendered_text, sink_module.RichText)
+    assert "failed calculation" in rendered_text.plain
+    assert "ZeroDivisionError" in rendered_text.plain
+    assert "\x1b" not in rendered_text.plain
 
 
 def test_package_demo_runs_without_main_module_warning() -> None:
